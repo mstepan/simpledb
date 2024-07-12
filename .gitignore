@@ -1,3 +1,9 @@
+# Ignore target folder
 /target
+
+# Ignore all RustRover files
 *.iml
 .idea
+
+# Ignore all data files
+*.data
