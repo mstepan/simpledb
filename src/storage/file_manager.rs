@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 use std::fs::{create_dir_all, File};
-use std::os::unix::fs::FileExt;
+use std::os::unix::fs::{FileExt, OpenOptionsExt};
 use std::path::Path;
 use std::process::exit;
 use std::str;
@@ -97,15 +97,15 @@ impl FileManager {
                 .read(true)
                 .write(true)
                 .create(true)
+                // 'O_SYNC' flag will sync all changes immediately to file system without delays
+                .custom_flags(libc::O_SYNC)
                 .open(&full_file_path)
                 .expect(&format!("Can't open file at: '{:?}'", &full_file_path));
 
-            // files_map
-            //     .insert(
-            //         file_name.to_string().clone(),
-            //         file.try_clone().expect("Can't clone File"),
-            //     )
-            //     .expect("Insert failed");
+            files_map.insert(
+                file_name.to_string().clone(),
+                file.try_clone().expect("Can't clone File"),
+            );
 
             return file;
         }
@@ -127,14 +127,26 @@ mod tests {
 
         let block = BlockId::new("user.data".to_string(), 0);
 
+        // write to file 1st time
         file_mgr.write_to_file(&page, &block);
 
-        let mut page_from_file = file_mgr.read_from_file(&block);
+        // read from file
+        let mut page_from_file1 = file_mgr.read_from_file(&block);
 
-        assert_eq!("user: 123, age: 99", page_from_file.get_string(100));
+        assert_eq!("user: 123, age: 99", page_from_file1.get_string(100));
         assert_eq!(
             "Writing you own DB engine is complicated",
-            page_from_file.get_string(200)
+            page_from_file1.get_string(200)
         );
+
+        let mut new_page = Page::new(4096);
+        new_page.put_string(100, "some new data");
+
+        // write to file 2nd time
+        file_mgr.write_to_file(&new_page, &block);
+
+        let mut page_from_file2 = file_mgr.read_from_file(&block);
+
+        assert_eq!("some new data", page_from_file2.get_string(100));
     }
 }
