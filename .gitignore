@@ -7,3 +7,7 @@
 
 # Ignore all data files
 *.data
+
+# Ignore DB root dirs
+db
+db-test

@@ -11,14 +11,14 @@ use std::sync::Mutex;
 use crate::storage::block_id::BlockId;
 use crate::storage::page::Page;
 
-const DEFAULT_BLOCK_SIZE: u64 = 4096;
+pub const DEFAULT_BLOCK_SIZE: u64 = 4096;
 
 ///
 /// FileMgr.
 ///
 /// Represents the main interface to store and load data from file system into Page and back.
 ///
-struct FileManager {
+pub struct FileManager {
     db_dir: String,
     files_map: Mutex<HashMap<String, File>>,
     block_size: u64,
