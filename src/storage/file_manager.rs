@@ -11,6 +11,8 @@ use std::sync::Mutex;
 use crate::storage::block_id::BlockId;
 use crate::storage::page::Page;
 
+const DEFAULT_BLOCK_SIZE: u64 = 4096;
+
 ///
 /// FileMgr.
 ///
@@ -23,7 +25,7 @@ struct FileManager {
 }
 
 impl FileManager {
-    pub fn new(db_dir: String, block_size: u64) -> Self {
+    pub fn new(db_dir: &str, block_size: u64) -> Self {
         let db_dir_path = Path::new(&db_dir);
 
         if db_dir_path.exists() {
@@ -39,7 +41,7 @@ impl FileManager {
         }
 
         Self {
-            db_dir,
+            db_dir: db_dir.to_string(),
             files_map: Mutex::new(HashMap::new()),
             block_size,
         }
@@ -79,6 +81,29 @@ impl FileManager {
         return page;
     }
 
+    ///
+    /// Append new block to the end of a file.
+    ///
+    pub fn append(&mut self, file_name: &str) -> BlockId {
+        let mut files_map = self
+            .files_map
+            .lock()
+            .expect("'files_map' lock failed during 'read_from_file'");
+
+        let file = Self::get_file_from_map(&self.db_dir, &mut files_map, &file_name);
+
+        let new_block_no =
+            file.metadata().expect("Can't get file metadata").len() / self.block_size;
+        let new_block = BlockId::new(file_name.to_string(), new_block_no);
+
+        let mut buf = vec![0; self.block_size as usize];
+
+        file.write_all_at(&mut buf[..], new_block.block_no * self.block_size)
+            .expect("Can't append to file end");
+
+        return new_block;
+    }
+
     fn get_file_from_map(
         db_dir: &str,
         files_map: &mut HashMap<String, File>,
@@ -115,38 +140,91 @@ impl FileManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs::{metadata, remove_dir_all};
+    use std::panic;
+
+    const DB_DIR_TEST: &str = "/Users/mstepan/repo-rust/simpledb/db-test";
+
+    static LOCK: Mutex<i32> = Mutex::new(0);
+
+    fn run_test<T>(test: T) -> ()
+    where
+        T: FnOnce() -> () + panic::UnwindSafe,
+    {
+        // Allow only one test at a time, otherwise we will have spurious issues b/c
+        // the same 'DB_DIR_TEST' directory is used
+        let _guard = LOCK.lock().unwrap();
+        setup();
+        let result = panic::catch_unwind(|| test());
+        teardown();
+        assert!(result.is_ok())
+    }
+
+    fn setup() {
+        if metadata(DB_DIR_TEST).is_ok() {
+            remove_dir_all(DB_DIR_TEST).expect("Can't delete 'DB_DIR_TEST' in setup");
+        }
+
+        create_dir_all(DB_DIR_TEST).expect("Can't create 'DB_DIR_TEST' in setup")
+    }
+
+    fn teardown() {
+        remove_dir_all(DB_DIR_TEST).expect("Can't delete 'DB_DIR_TEST' in teardown")
+    }
+
+    #[test]
+    fn append() {
+        run_test(|| {
+            let mut file_mgr = FileManager::new(DB_DIR_TEST, DEFAULT_BLOCK_SIZE);
+
+            let appends_count = 3;
+
+            for _ in 0..appends_count {
+                file_mgr.append("log.dat");
+            }
+
+            let file =
+                File::open(format!("{}/log.dat", DB_DIR_TEST)).expect("Can't open 'log.dat' file");
+
+            assert_eq!(
+                appends_count * DEFAULT_BLOCK_SIZE,
+                file.metadata().unwrap().len(),
+            );
+        });
+    }
 
     #[test]
     fn write_to_file_and_read() {
-        let mut file_mgr =
-            FileManager::new("/Users/mstepan/repo-rust/simpledb/db".to_string(), 4096);
+        run_test(|| {
+            let mut file_mgr = FileManager::new(DB_DIR_TEST, DEFAULT_BLOCK_SIZE);
 
-        let mut page = Page::new(4096);
-        page.put_string(100, "user: 123, age: 99");
-        page.put_string(200, "Writing you own DB engine is complicated");
+            let mut page = Page::new(DEFAULT_BLOCK_SIZE);
+            page.put_string(100, "user: 123, age: 99");
+            page.put_string(200, "Writing you own DB engine is complicated");
 
-        let block = BlockId::new("user.data".to_string(), 0);
+            let block = BlockId::new("user.data".to_string(), 0);
 
-        // write to file 1st time
-        file_mgr.write_to_file(&page, &block);
+            // write to file 1st time
+            file_mgr.write_to_file(&page, &block);
 
-        // read from file
-        let mut page_from_file1 = file_mgr.read_from_file(&block);
+            // read from file
+            let mut page_from_file1 = file_mgr.read_from_file(&block);
 
-        assert_eq!("user: 123, age: 99", page_from_file1.get_string(100));
-        assert_eq!(
-            "Writing you own DB engine is complicated",
-            page_from_file1.get_string(200)
-        );
+            assert_eq!("user: 123, age: 99", page_from_file1.get_string(100));
+            assert_eq!(
+                "Writing you own DB engine is complicated",
+                page_from_file1.get_string(200)
+            );
 
-        let mut new_page = Page::new(4096);
-        new_page.put_string(100, "some new data");
+            let mut new_page = Page::new(DEFAULT_BLOCK_SIZE);
+            new_page.put_string(100, "some new data");
 
-        // write to file 2nd time
-        file_mgr.write_to_file(&new_page, &block);
+            // write to file 2nd time
+            file_mgr.write_to_file(&new_page, &block);
 
-        let mut page_from_file2 = file_mgr.read_from_file(&block);
+            let mut page_from_file2 = file_mgr.read_from_file(&block);
 
-        assert_eq!("some new data", page_from_file2.get_string(100));
+            assert_eq!("some new data", page_from_file2.get_string(100));
+        });
     }
 }
