@@ -1,6 +1,7 @@
 use crate::storage::file_manager::{FileManager, DEFAULT_BLOCK_SIZE};
 
 mod storage;
+mod write_ahead_log;
 
 const DB_DIR: &str = "/Users/mstepan/repo-rust/simpledb/db";
 

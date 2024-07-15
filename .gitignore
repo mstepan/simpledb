@@ -11,3 +11,4 @@
 # Ignore DB root dirs
 db
 db-test
+db-log-manager-test

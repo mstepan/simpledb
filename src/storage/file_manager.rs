@@ -25,7 +25,15 @@ pub struct FileManager {
 }
 
 impl FileManager {
+    pub fn with_default_block_size(db_dir: &str) -> Self {
+        return Self::new(db_dir, DEFAULT_BLOCK_SIZE);
+    }
+
     pub fn new(db_dir: &str, block_size: u64) -> Self {
+        if block_size == 0 {
+            panic!("Can't create FileManager with 0 block_size");
+        }
+
         let db_dir_path = Path::new(&db_dir);
 
         if db_dir_path.exists() {
@@ -45,6 +53,28 @@ impl FileManager {
             files_map: Mutex::new(HashMap::new()),
             block_size,
         }
+    }
+    pub fn block_size(&self) -> u64 {
+        return self.block_size;
+    }
+
+    ///
+    /// Calculate file length in logical blocks. To do so we just divide real file length
+    /// by the number of blocks.
+    ///
+    pub fn length(&self, file_name: &str) -> u64 {
+        let mut files_map = self
+            .files_map
+            .lock()
+            .expect("'files_map' lock failed during 'length' call");
+
+        let file = Self::get_file_from_map(&self.db_dir, &mut files_map, file_name);
+
+        return file
+            .metadata()
+            .expect("Can't read file length from metadata")
+            .len()
+            / self.block_size();
     }
 
     ///
@@ -170,6 +200,22 @@ mod tests {
 
     fn teardown() {
         remove_dir_all(DB_DIR_TEST).expect("Can't delete 'DB_DIR_TEST' in teardown")
+    }
+
+    #[test]
+    fn create_with_default_capacity() {
+        run_test(|| {
+            let file_mgr = FileManager::with_default_block_size(DB_DIR_TEST);
+
+            assert_eq!(DB_DIR_TEST, file_mgr.db_dir);
+            assert_eq!(DEFAULT_BLOCK_SIZE, file_mgr.block_size());
+        });
+    }
+
+    #[test]
+    #[should_panic]
+    fn create_with_zero_block_size_should_panic() {
+        FileManager::new(DB_DIR_TEST, 0);
     }
 
     #[test]
