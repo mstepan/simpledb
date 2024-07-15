@@ -13,6 +13,7 @@ pub struct Page {
 }
 
 const INTEGER_SIZE_IN_BYTES: usize = 4;
+const LONG_SIZE_IN_BYTES: usize = 8;
 
 impl Page {
     pub fn new(size: u64) -> Self {
@@ -78,6 +79,21 @@ impl Page {
     pub fn get_u32(&self, offset: usize) -> u32 {
         u32::from_be_bytes(
             self.data[offset..offset + INTEGER_SIZE_IN_BYTES]
+                .try_into()
+                .unwrap(),
+        )
+    }
+
+    ///
+    /// Store/load unsigned long.
+    ///
+    pub fn put_u64(&mut self, offset: usize, value: u64) {
+        self.data[offset..offset + LONG_SIZE_IN_BYTES].copy_from_slice(&value.to_be_bytes());
+    }
+
+    pub fn get_u64(&self, offset: usize) -> u64 {
+        u64::from_be_bytes(
+            self.data[offset..offset + LONG_SIZE_IN_BYTES]
                 .try_into()
                 .unwrap(),
         )

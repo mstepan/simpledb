@@ -11,6 +11,8 @@ use std::sync::Mutex;
 use crate::storage::block_id::BlockId;
 use crate::storage::page::Page;
 
+use crate::utils::fs_test_utils::FSTestUtil;
+
 pub const DEFAULT_BLOCK_SIZE: u64 = 4096;
 
 ///
@@ -89,13 +91,13 @@ impl FileManager {
         let file = Self::get_file_from_map(&self.db_dir, &mut files_map, &block.file_name);
 
         file.write_all_at(&page.data, block.block_no * self.block_size)
-            .expect("Can;t write page to file");
+            .expect("Can't write page to file");
     }
 
     ///
     /// Read block from file into in-memory Page
     ///
-    pub fn read_from_file(&mut self, block: &BlockId) -> Page {
+    pub fn read_from_file(&mut self, block: &BlockId, page: &mut Page) {
         let mut files_map = self
             .files_map
             .lock()
@@ -103,12 +105,10 @@ impl FileManager {
 
         let file = Self::get_file_from_map(&self.db_dir, &mut files_map, &block.file_name);
 
-        let mut page = Page::new(self.block_size);
+        // let mut page = Page::new(self.block_size);
 
         file.read_exact_at(&mut page.data, block.block_no * self.block_size)
             .expect("Can't read page from file");
-
-        return page;
     }
 
     ///
@@ -170,44 +170,16 @@ impl FileManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs::{metadata, remove_dir_all};
-    use std::panic;
 
-    const DB_DIR_TEST: &str = "/Users/mstepan/repo-rust/simpledb/db-test";
-
-    static LOCK: Mutex<i32> = Mutex::new(0);
-
-    fn run_test<T>(test: T) -> ()
-    where
-        T: FnOnce() -> () + panic::UnwindSafe,
-    {
-        // Allow only one test at a time, otherwise we will have spurious issues b/c
-        // the same 'DB_DIR_TEST' directory is used
-        let _guard = LOCK.lock().unwrap();
-        setup();
-        let result = panic::catch_unwind(|| test());
-        teardown();
-        assert!(result.is_ok())
-    }
-
-    fn setup() {
-        if metadata(DB_DIR_TEST).is_ok() {
-            remove_dir_all(DB_DIR_TEST).expect("Can't delete 'DB_DIR_TEST' in setup");
-        }
-
-        create_dir_all(DB_DIR_TEST).expect("Can't create 'DB_DIR_TEST' in setup")
-    }
-
-    fn teardown() {
-        remove_dir_all(DB_DIR_TEST).expect("Can't delete 'DB_DIR_TEST' in teardown")
-    }
+    const DB_DIR_TEST: &str = "/Users/mstepan/repo-rust/simpledb/test-dir/db";
 
     #[test]
     fn create_with_default_capacity() {
-        run_test(|| {
-            let file_mgr = FileManager::with_default_block_size(DB_DIR_TEST);
+        let mut test_util = FSTestUtil::new(DB_DIR_TEST);
+        test_util.run_test(|dir| {
+            let file_mgr = FileManager::with_default_block_size(dir);
 
-            assert_eq!(DB_DIR_TEST, file_mgr.db_dir);
+            assert_eq!(dir, file_mgr.db_dir);
             assert_eq!(DEFAULT_BLOCK_SIZE, file_mgr.block_size());
         });
     }
@@ -220,8 +192,9 @@ mod tests {
 
     #[test]
     fn append() {
-        run_test(|| {
-            let mut file_mgr = FileManager::new(DB_DIR_TEST, DEFAULT_BLOCK_SIZE);
+        let mut test_util = FSTestUtil::new(DB_DIR_TEST);
+        test_util.run_test(|dir| {
+            let mut file_mgr = FileManager::new(dir, DEFAULT_BLOCK_SIZE);
 
             let appends_count = 3;
 
@@ -230,7 +203,7 @@ mod tests {
             }
 
             let file =
-                File::open(format!("{}/log.dat", DB_DIR_TEST)).expect("Can't open 'log.dat' file");
+                File::open(format!("{}/log.dat", dir)).expect("Can't open 'log.dat' file");
 
             assert_eq!(
                 appends_count * DEFAULT_BLOCK_SIZE,
@@ -241,8 +214,9 @@ mod tests {
 
     #[test]
     fn write_to_file_and_read() {
-        run_test(|| {
-            let mut file_mgr = FileManager::new(DB_DIR_TEST, DEFAULT_BLOCK_SIZE);
+        let mut test_util = FSTestUtil::new(DB_DIR_TEST);
+        test_util.run_test(|dir| {
+            let mut file_mgr = FileManager::new(dir, DEFAULT_BLOCK_SIZE);
 
             let mut page = Page::new(DEFAULT_BLOCK_SIZE);
             page.put_string(100, "user: 123, age: 99");
@@ -254,7 +228,8 @@ mod tests {
             file_mgr.write_to_file(&page, &block);
 
             // read from file
-            let mut page_from_file1 = file_mgr.read_from_file(&block);
+            let mut page_from_file1 = Page::new(file_mgr.block_size);
+            file_mgr.read_from_file(&block, &mut page_from_file1);
 
             assert_eq!("user: 123, age: 99", page_from_file1.get_string(100));
             assert_eq!(
@@ -268,7 +243,8 @@ mod tests {
             // write to file 2nd time
             file_mgr.write_to_file(&new_page, &block);
 
-            let mut page_from_file2 = file_mgr.read_from_file(&block);
+            let mut page_from_file2 = Page::new(file_mgr.block_size);
+            file_mgr.read_from_file(&block, &mut page_from_file2);
 
             assert_eq!("some new data", page_from_file2.get_string(100));
         });
