@@ -171,7 +171,7 @@ impl FileManager {
 mod tests {
     use super::*;
 
-    const DB_DIR_TEST: &str = "/Users/mstepan/repo-rust/simpledb/test-dir/db";
+    const DB_DIR_TEST: &str = "/Users/mstepan/repo-rust/simpledb/test-dir/db-file-manager";
 
     #[test]
     fn create_with_default_capacity() {

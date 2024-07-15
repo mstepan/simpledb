@@ -18,7 +18,7 @@ impl<'a> LogManager<'a> {
 
         let log_file_size_in_blocks = file_mgr.length(log_file_name);
 
-        let mut cur_block;
+        let cur_block;
 
         if log_file_size_in_blocks == 0 {
             cur_block = Self::append_new_block(file_mgr, log_file_name, &mut page);
@@ -52,25 +52,29 @@ impl<'a> LogManager<'a> {
         return cur_block;
     }
 
-    pub fn flush(&self, lsn: u32) {}
+    pub fn flush(&self, _lsn: u32) {}
 
-    pub fn append(&self, data: &[u8]) -> u32 {
+    pub fn append(&self, _data: &[u8]) -> u32 {
         return self.cur_lsn;
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::utils::fs_test_utils::FSTestUtil;
     use super::*;
 
-    const DB_DIR_TEST: &str = "/Users/mstepan/repo-rust/simpledb/db-log-manager-test";
+    const DB_DIR_TEST: &str = "/Users/mstepan/repo-rust/simpledb/test-dir/db-log-manager";
 
     #[test]
     fn create_log_manager() {
-        let mut file_mgr = FileManager::with_default_block_size(DB_DIR_TEST);
-        let log_mgr = LogManager::new(&mut file_mgr, "log-file.dat");
+        let mut test_util = FSTestUtil::new(DB_DIR_TEST);
+        test_util.run_test(|_dir| {
+            let mut file_mgr = FileManager::with_default_block_size(DB_DIR_TEST);
+            let log_mgr = LogManager::new(&mut file_mgr, "log-file.dat");
 
-        assert_eq!(0, log_mgr.cur_lsn);
-        assert_eq!(0, log_mgr.last_saved_lsn);
+            assert_eq!(0, log_mgr.cur_lsn);
+            assert_eq!(0, log_mgr.last_saved_lsn);
+        });
     }
 }

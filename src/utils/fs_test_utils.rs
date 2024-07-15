@@ -5,8 +5,7 @@ use std::sync::Mutex;
 static DIR_NO: Mutex<u32> = Mutex::new(0);
 
 pub struct FSTestUtil {
-    test_dir: String,
-    lock: Mutex<i32>,
+    test_dir: String
 }
 
 impl FSTestUtil {
@@ -16,8 +15,7 @@ impl FSTestUtil {
         *dir_no = *dir_no + 1;
 
         return Self {
-            test_dir: format!("{}-{}", test_dir_root, *dir_no),
-            lock: Mutex::new(0),
+            test_dir: format!("{}-{}", test_dir_root, *dir_no)
         };
     }
 
