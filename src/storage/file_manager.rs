@@ -64,7 +64,7 @@ impl FileManager {
     /// Calculate file length in logical blocks. To do so we just divide real file length
     /// by the number of blocks.
     ///
-    pub fn length(&self, file_name: &str) -> u64 {
+    pub fn length_in_logical_blocks(&self, file_name: &str) -> u64 {
         let mut files_map = self
             .files_map
             .lock()
@@ -82,7 +82,7 @@ impl FileManager {
     ///
     /// Write in-memory page into file block.
     ///
-    pub fn write_to_file(&mut self, page: &Page, block: &BlockId) {
+    pub fn store_page(&mut self, block: &BlockId, page: &Page) {
         let mut files_map = self
             .files_map
             .lock()
@@ -97,7 +97,7 @@ impl FileManager {
     ///
     /// Read block from file into in-memory Page
     ///
-    pub fn read_from_file(&mut self, block: &BlockId, page: &mut Page) {
+    pub fn load_page(&mut self, block: &BlockId, page: &mut Page) {
         let mut files_map = self
             .files_map
             .lock()
@@ -225,11 +225,11 @@ mod tests {
             let block = BlockId::new("user.data".to_string(), 0);
 
             // write to file 1st time
-            file_mgr.write_to_file(&page, &block);
+            file_mgr.store_page(&block, &page);
 
             // read from file
             let mut page_from_file1 = Page::new(file_mgr.block_size);
-            file_mgr.read_from_file(&block, &mut page_from_file1);
+            file_mgr.load_page(&block, &mut page_from_file1);
 
             assert_eq!("user: 123, age: 99", page_from_file1.get_string(100));
             assert_eq!(
@@ -241,10 +241,10 @@ mod tests {
             new_page.put_string(100, "some new data");
 
             // write to file 2nd time
-            file_mgr.write_to_file(&new_page, &block);
+            file_mgr.store_page(&block, &new_page);
 
             let mut page_from_file2 = Page::new(file_mgr.block_size);
-            file_mgr.read_from_file(&block, &mut page_from_file2);
+            file_mgr.load_page(&block, &mut page_from_file2);
 
             assert_eq!("some new data", page_from_file2.get_string(100));
         });

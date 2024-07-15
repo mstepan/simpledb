@@ -13,10 +13,13 @@ struct LogManager<'a> {
 }
 
 impl<'a> LogManager<'a> {
+    ///
+    /// Create new LogManager. There should be ONE log manager per DB.
+    ///
     pub fn new(file_mgr: &'a mut FileManager, log_file_name: &str) -> Self {
         let mut page = Page::new(file_mgr.block_size());
 
-        let log_file_size_in_blocks = file_mgr.length(log_file_name);
+        let log_file_size_in_blocks = file_mgr.length_in_logical_blocks(log_file_name);
 
         let cur_block;
 
@@ -24,7 +27,7 @@ impl<'a> LogManager<'a> {
             cur_block = Self::append_new_block(file_mgr, log_file_name, &mut page);
         } else {
             cur_block = BlockId::new(log_file_name.to_string(), log_file_size_in_blocks - 1);
-            file_mgr.read_from_file(&cur_block, &mut page);
+            file_mgr.load_page(&cur_block, &mut page);
         };
 
         return Self {
@@ -44,7 +47,7 @@ impl<'a> LogManager<'a> {
     ) -> BlockId {
         let cur_block = file_mgr.append(log_file_name);
         page.put_u64(0, file_mgr.block_size());
-        file_mgr.write_to_file(&page, &cur_block);
+        file_mgr.store_page(&cur_block, &page);
 
         let temp = page.get_u64(0);
         println!("temp: {}", temp);
@@ -61,8 +64,8 @@ impl<'a> LogManager<'a> {
 
 #[cfg(test)]
 mod tests {
-    use crate::utils::fs_test_utils::FSTestUtil;
     use super::*;
+    use crate::utils::fs_test_utils::FSTestUtil;
 
     const DB_DIR_TEST: &str = "/Users/mstepan/repo-rust/simpledb/test-dir/db-log-manager";
 
