@@ -7,7 +7,7 @@ use crate::utils::primitive_types::LONG_SIZE_IN_BYTES;
 ///
 /// The main purpose of LogManager is to manage APPEND-only list of logs.
 ///
-struct LogManager<'a> {
+pub struct LogManager<'a> {
     file_mgr: &'a mut FileManager,
     log_file_name: String,
     cur_lsn: u32,

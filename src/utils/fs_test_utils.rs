@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use std::fs::{create_dir_all, metadata, remove_dir_all};
 use std::panic;
 use std::sync::Mutex;

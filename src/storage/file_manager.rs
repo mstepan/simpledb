@@ -11,6 +11,7 @@ use std::sync::Mutex;
 use crate::storage::block_id::BlockId;
 use crate::storage::page::Page;
 
+#[allow(unused_imports)]
 use crate::utils::fs_test_utils::FSTestUtil;
 
 pub const DEFAULT_BLOCK_SIZE: u64 = 4096;
@@ -27,10 +28,16 @@ pub struct FileManager {
 }
 
 impl FileManager {
+    ///
+    /// Create FileManager with specified dir and default capacity.
+    ///
     pub fn with_default_block_size(db_dir: &str) -> Self {
         return Self::new(db_dir, DEFAULT_BLOCK_SIZE);
     }
 
+    ///
+    /// Create FileManager with specified dir and caapcity.
+    ///
     pub fn new(db_dir: &str, block_size: u64) -> Self {
         if block_size == 0 {
             panic!("Can't create FileManager with 0 block_size");
