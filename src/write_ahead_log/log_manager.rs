@@ -2,9 +2,13 @@
 use crate::storage::block_id::BlockId;
 use crate::storage::file_manager::FileManager;
 use crate::storage::page::Page;
+use crate::utils::primitive_types::LONG_SIZE_IN_BYTES;
 
+///
+/// The main purpose of LogManager is to manage APPEND-only list of logs.
+///
 struct LogManager<'a> {
-    file_mgr: &'a FileManager,
+    file_mgr: &'a mut FileManager,
     log_file_name: String,
     cur_lsn: u32,
     last_saved_lsn: u32,
@@ -48,16 +52,54 @@ impl<'a> LogManager<'a> {
         let cur_block = file_mgr.append(log_file_name);
         page.put_u64(0, file_mgr.block_size());
         file_mgr.store_page(&cur_block, &page);
-
-        let temp = page.get_u64(0);
-        println!("temp: {}", temp);
-
         return cur_block;
     }
 
-    pub fn flush(&self, _lsn: u32) {}
+    ///
+    /// Save log page into file system if any changes detected.
+    ///
+    pub fn flush(&mut self, lsn: u32) {
+        if lsn > self.last_saved_lsn {
+            self.flush_force();
+        }
+    }
 
-    pub fn append(&self, _data: &[u8]) -> u32 {
+    ///
+    /// Private method to flush changes to file system.
+    ///
+    fn flush_force(&mut self) {
+        self.file_mgr.store_page(&self.cur_block, &self.page);
+        self.last_saved_lsn = self.cur_lsn;
+    }
+
+    ///
+    /// Append log information. The log information is saved right-to-left, so that
+    /// LogIterator can read from most recent value to oldest one in left-to-right order.
+    ///
+    pub fn append(&mut self, data: &[u8]) -> u32 {
+        let mut boundary = self.page.get_u64(0);
+
+        let data_size_in_bytes = data.len() + LONG_SIZE_IN_BYTES;
+
+        let mut store_pos = (boundary as usize) - data_size_in_bytes;
+
+        // Page overflow, so store current page and append new block
+        if store_pos < LONG_SIZE_IN_BYTES {
+            self.file_mgr.store_page(&self.cur_block, &self.page);
+
+            self.page = Page::new(self.file_mgr.block_size());
+            let new_block =
+                Self::append_new_block(self.file_mgr, &self.log_file_name, &mut self.page);
+            self.cur_block = new_block;
+
+            // recalculate store position
+            boundary = self.page.get_u64(0);
+            store_pos = (boundary as usize) - data_size_in_bytes;
+        }
+
+        self.page.put_bytes(store_pos, data);
+
+        self.cur_lsn += 1;
         return self.cur_lsn;
     }
 }
@@ -72,12 +114,28 @@ mod tests {
     #[test]
     fn create_log_manager() {
         let mut test_util = FSTestUtil::new(DB_DIR_TEST);
-        test_util.run_test(|_dir| {
-            let mut file_mgr = FileManager::with_default_block_size(DB_DIR_TEST);
+        test_util.run_test(|dir| {
+            let mut file_mgr = FileManager::with_default_block_size(dir);
             let log_mgr = LogManager::new(&mut file_mgr, "log-file.dat");
 
             assert_eq!(0, log_mgr.cur_lsn);
             assert_eq!(0, log_mgr.last_saved_lsn);
+        });
+    }
+
+    #[test]
+    fn append_logs() {
+        let mut test_util = FSTestUtil::new(DB_DIR_TEST);
+        test_util.run_test(|dir| {
+            let mut file_mgr = FileManager::with_default_block_size(dir);
+            let mut log_mgr = LogManager::new(&mut file_mgr, "log-file.dat");
+
+            let lsn = log_mgr.append("message-1".as_bytes());
+            assert_eq!(1, lsn);
+
+            log_mgr.append("message-2".as_bytes());
+            let lsn = log_mgr.append("message-3".as_bytes());
+            assert_eq!(3, lsn);
         });
     }
 }

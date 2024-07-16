@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
 use std::str;
+use crate::utils::primitive_types::{INTEGER_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES};
 
 ///
 /// PAGE.
@@ -11,9 +12,6 @@ use std::str;
 pub struct Page {
     pub data: Vec<u8>,
 }
-
-const INTEGER_SIZE_IN_BYTES: usize = 4;
-const LONG_SIZE_IN_BYTES: usize = 8;
 
 impl Page {
     pub fn new(size: u64) -> Self {
