@@ -2,7 +2,7 @@
 use crate::storage::block_id::BlockId;
 use crate::storage::file_manager::FileManager;
 use crate::storage::page::Page;
-use crate::utils::primitive_types::LONG_SIZE_IN_BYTES;
+use crate::utils::primitive_types::{INTEGER_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES};
 
 ///
 /// The main purpose of LogManager is to manage APPEND-only list of logs.
@@ -74,12 +74,12 @@ impl<'a> LogManager<'a> {
 
     ///
     /// Append log information. The log information is saved right-to-left, so that
-    /// LogIterator can read from most recent value to oldest one in left-to-right order.
+    /// LogIterator can read from most recent value to the oldest one in left-to-right order.
     ///
     pub fn append(&mut self, data: &[u8]) -> u32 {
         let mut boundary = self.page.get_u64(0);
 
-        let data_size_in_bytes = data.len() + LONG_SIZE_IN_BYTES;
+        let data_size_in_bytes = data.len() + INTEGER_SIZE_IN_BYTES;
 
         let mut store_pos = (boundary as usize) - data_size_in_bytes;
 
@@ -88,15 +88,15 @@ impl<'a> LogManager<'a> {
             self.file_mgr.store_page(&self.cur_block, &self.page);
 
             self.page = Page::new(self.file_mgr.block_size());
-            let new_block =
+            self.cur_block =
                 Self::append_new_block(self.file_mgr, &self.log_file_name, &mut self.page);
-            self.cur_block = new_block;
 
             // recalculate store position
             boundary = self.page.get_u64(0);
             store_pos = (boundary as usize) - data_size_in_bytes;
         }
 
+        self.page.put_u64(0, store_pos as u64);
         self.page.put_bytes(store_pos, data);
 
         self.cur_lsn += 1;
@@ -106,14 +106,17 @@ impl<'a> LogManager<'a> {
 
 #[cfg(test)]
 mod tests {
-    use std::env::temp_dir;
     use super::*;
     use crate::utils::fs_test_utils::FSTestUtil;
+    use std::env::temp_dir;
 
     #[test]
     fn create_log_manager() {
-
-        let db_dir_test = temp_dir().join("simpledb/log-manager").to_str().unwrap().to_string();
+        let db_dir_test = temp_dir()
+            .join("simpledb/log-manager")
+            .to_str()
+            .unwrap()
+            .to_string();
 
         let mut test_util = FSTestUtil::new(&db_dir_test);
         test_util.run_test(|dir| {
@@ -127,7 +130,11 @@ mod tests {
 
     #[test]
     fn append_logs() {
-        let db_dir_test = temp_dir().join("simpledb/log-manager").to_str().unwrap().to_string();
+        let db_dir_test = temp_dir()
+            .join("simpledb/log-manager")
+            .to_str()
+            .unwrap()
+            .to_string();
 
         let mut test_util = FSTestUtil::new(&db_dir_test);
         test_util.run_test(|dir| {

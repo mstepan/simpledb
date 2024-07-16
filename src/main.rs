@@ -1,4 +1,6 @@
+use crate::storage::block_id::BlockId;
 use crate::storage::file_manager::FileManager;
+use crate::storage::page::Page;
 use crate::write_ahead_log::log_manager::LogManager;
 use std::fs::{metadata, remove_dir_all};
 
@@ -13,12 +15,17 @@ fn main() {
         remove_dir_all(DB_DIR).expect("Can't delete 'DB_DIR' directory");
     }
 
-    let mut file_mgr = FileManager::with_default_block_size(DB_DIR);
-    // file_mgr.append("log.dat");
+    let mut file_mgr = FileManager::new(DB_DIR, 4096);
 
     let mut log_manager = LogManager::new(&mut file_mgr, "log-file.data");
 
-    log_manager.append("hello, world!!!".as_bytes());
+    let mut lsn = 0;
+
+    for i in 0..10 {
+        let msg = format!("message-{}", i);
+        lsn = log_manager.append(msg.as_bytes());
+    }
+    log_manager.flush(lsn);
 
     println!("SimpleDB started");
 }
