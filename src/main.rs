@@ -14,7 +14,7 @@ fn main() {
         remove_dir_all(DB_DIR).expect("Can't delete 'DB_DIR' directory");
     }
 
-    let mut file_mgr = FileManager::new(DB_DIR, 4096);
+    let mut file_mgr = FileManager::new(DB_DIR, 20);
 
     let mut log_manager = LogManager::new(&mut file_mgr, "log-file.data");
 

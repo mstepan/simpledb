@@ -84,10 +84,10 @@ impl<'a> LogManager<'a> {
         //
         // value can be negative here, so will fail
         //
-        let mut store_pos = (boundary as usize) - data_size_in_bytes;
+        let mut store_pos = (boundary as i32) - data_size_in_bytes as i32;
 
         // Page overflow, so store current page and append new block
-        if store_pos < LONG_SIZE_IN_BYTES {
+        if store_pos < LONG_SIZE_IN_BYTES as i32 {
             self.file_mgr.store_page(&self.cur_block, &self.page);
 
             self.page = Page::new(self.file_mgr.block_size());
@@ -96,11 +96,11 @@ impl<'a> LogManager<'a> {
 
             // recalculate store position
             boundary = self.page.get_u64(0);
-            store_pos = (boundary as usize) - data_size_in_bytes;
+            store_pos = (boundary as i32) - data_size_in_bytes as i32;
         }
 
         self.page.put_u64(0, store_pos as u64);
-        self.page.put_bytes(store_pos, data);
+        self.page.put_bytes(store_pos as usize, data);
 
         self.cur_lsn += 1;
         return self.cur_lsn;
