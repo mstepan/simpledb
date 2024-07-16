@@ -81,6 +81,9 @@ impl<'a> LogManager<'a> {
 
         let data_size_in_bytes = data.len() + INTEGER_SIZE_IN_BYTES;
 
+        //
+        // value can be negative here, so will fail
+        //
         let mut store_pos = (boundary as usize) - data_size_in_bytes;
 
         // Page overflow, so store current page and append new block
