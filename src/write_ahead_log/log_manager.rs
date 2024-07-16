@@ -106,14 +106,16 @@ impl<'a> LogManager<'a> {
 
 #[cfg(test)]
 mod tests {
+    use std::env::temp_dir;
     use super::*;
     use crate::utils::fs_test_utils::FSTestUtil;
 
-    const DB_DIR_TEST: &str = "/Users/mstepan/repo-rust/simpledb/test-dir/db-log-manager";
-
     #[test]
     fn create_log_manager() {
-        let mut test_util = FSTestUtil::new(DB_DIR_TEST);
+
+        let db_dir_test = temp_dir().join("simpledb/log-manager").to_str().unwrap().to_string();
+
+        let mut test_util = FSTestUtil::new(&db_dir_test);
         test_util.run_test(|dir| {
             let mut file_mgr = FileManager::with_default_block_size(dir);
             let log_mgr = LogManager::new(&mut file_mgr, "log-file.dat");
@@ -125,7 +127,9 @@ mod tests {
 
     #[test]
     fn append_logs() {
-        let mut test_util = FSTestUtil::new(DB_DIR_TEST);
+        let db_dir_test = temp_dir().join("simpledb/log-manager").to_str().unwrap().to_string();
+
+        let mut test_util = FSTestUtil::new(&db_dir_test);
         test_util.run_test(|dir| {
             let mut file_mgr = FileManager::with_default_block_size(dir);
             let mut log_mgr = LogManager::new(&mut file_mgr, "log-file.dat");

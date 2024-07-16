@@ -170,12 +170,17 @@ impl FileManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    const DB_DIR_TEST: &str = "/Users/mstepan/repo-rust/simpledb/test-dir/db-file-manager";
+    use std::env::temp_dir;
 
     #[test]
     fn create_with_default_capacity() {
-        let mut test_util = FSTestUtil::new(DB_DIR_TEST);
+        let db_dir_test = temp_dir()
+            .join("simpledb/file-manager")
+            .to_str()
+            .unwrap()
+            .to_string();
+
+        let mut test_util = FSTestUtil::new(&db_dir_test);
         test_util.run_test(|dir| {
             let file_mgr = FileManager::with_default_block_size(dir);
 
@@ -187,12 +192,23 @@ mod tests {
     #[test]
     #[should_panic]
     fn create_with_zero_block_size_should_panic() {
-        FileManager::new(DB_DIR_TEST, 0);
+        let db_dir_test = temp_dir()
+            .join("simpledb/file-manager")
+            .to_str()
+            .unwrap()
+            .to_string();
+        FileManager::new(&db_dir_test, 0);
     }
 
     #[test]
     fn append() {
-        let mut test_util = FSTestUtil::new(DB_DIR_TEST);
+        let db_dir_test = temp_dir()
+            .join("simpledb/file-manager")
+            .to_str()
+            .unwrap()
+            .to_string();
+
+        let mut test_util = FSTestUtil::new(&db_dir_test);
         test_util.run_test(|dir| {
             let mut file_mgr = FileManager::new(dir, DEFAULT_BLOCK_SIZE);
 
@@ -202,8 +218,7 @@ mod tests {
                 file_mgr.append("log.dat");
             }
 
-            let file =
-                File::open(format!("{}/log.dat", dir)).expect("Can't open 'log.dat' file");
+            let file = File::open(format!("{}/log.dat", dir)).expect("Can't open 'log.dat' file");
 
             assert_eq!(
                 appends_count * DEFAULT_BLOCK_SIZE,
@@ -214,7 +229,13 @@ mod tests {
 
     #[test]
     fn write_to_file_and_read() {
-        let mut test_util = FSTestUtil::new(DB_DIR_TEST);
+        let db_dir_test = temp_dir()
+            .join("simpledb/file-manager")
+            .to_str()
+            .unwrap()
+            .to_string();
+
+        let mut test_util = FSTestUtil::new(&db_dir_test);
         test_util.run_test(|dir| {
             let mut file_mgr = FileManager::new(dir, DEFAULT_BLOCK_SIZE);
 
