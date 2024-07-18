@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
-use std::str;
 use crate::utils::primitive_types::{INTEGER_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES};
+use std::str;
 
 ///
 /// PAGE.
@@ -12,6 +12,9 @@ use crate::utils::primitive_types::{INTEGER_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES};
 pub struct Page {
     pub data: Vec<u8>,
 }
+
+#[derive(Debug, Clone)]
+pub struct PageOverflow;
 
 impl Page {
     pub fn new(size: u64) -> Self {
@@ -28,8 +31,9 @@ impl Page {
     ///
     /// Store/Read string slice.
     ///
-    pub fn put_string(&mut self, offset: usize, buf: &str) {
-        self.put_bytes(offset, buf.as_bytes());
+    pub fn put_string(&mut self, offset: usize, buf: &str) -> Result<(), PageOverflow> {
+        self.put_bytes(offset, buf.as_bytes())?;
+        return Ok(());
     }
 
     pub fn get_string(&mut self, offset: usize) -> &str {
@@ -39,12 +43,16 @@ impl Page {
     ///
     /// Store/Read slice of bytes
     ///
-    pub fn put_bytes(&mut self, offset: usize, buf: &[u8]) {
+    pub fn put_bytes(&mut self, offset: usize, buf: &[u8]) -> Result<(), PageOverflow> {
+        self.check_boundary(offset, buf.len() + INTEGER_SIZE_IN_BYTES)?;
+
         self.put_u32(offset, buf.len() as u32);
 
         let new_offset = offset + INTEGER_SIZE_IN_BYTES;
 
         self.data[new_offset..new_offset + buf.len()].copy_from_slice(&buf);
+
+        return Ok(());
     }
 
     pub fn get_bytes(&mut self, offset: usize) -> &[u8] {
@@ -57,8 +65,10 @@ impl Page {
     ///
     /// Store/Load signed int.
     ///
-    pub fn put_i32(&mut self, offset: usize, value: i32) {
+    pub fn put_i32(&mut self, offset: usize, value: i32) -> Result<(), PageOverflow> {
+        self.check_boundary(offset, INTEGER_SIZE_IN_BYTES)?;
         self.data[offset..offset + INTEGER_SIZE_IN_BYTES].copy_from_slice(&value.to_be_bytes());
+        return Ok(());
     }
     pub fn get_i32(&self, offset: usize) -> i32 {
         i32::from_be_bytes(
@@ -72,6 +82,7 @@ impl Page {
     /// Store/Load unsigned int.
     ///
     pub fn put_u32(&mut self, offset: usize, value: u32) {
+        //TODO: handle page overflow here
         self.data[offset..offset + INTEGER_SIZE_IN_BYTES].copy_from_slice(&value.to_be_bytes());
     }
     pub fn get_u32(&self, offset: usize) -> u32 {
@@ -86,6 +97,7 @@ impl Page {
     /// Store/load unsigned long.
     ///
     pub fn put_u64(&mut self, offset: usize, value: u64) {
+        //TODO: handle page overflow here
         self.data[offset..offset + LONG_SIZE_IN_BYTES].copy_from_slice(&value.to_be_bytes());
     }
 
@@ -96,6 +108,14 @@ impl Page {
                 .unwrap(),
         )
     }
+
+    fn check_boundary(&self, offset: usize, elements_size: usize) -> Result<(), PageOverflow> {
+        if offset + elements_size > self.data.len() {
+            return Err(PageOverflow);
+        }
+
+        return Ok(());
+    }
 }
 
 #[cfg(test)]
@@ -103,30 +123,42 @@ mod tests {
     use super::*;
 
     #[test]
-    fn page_store_load_string() {
+    fn put_get_string() {
         let mut page = Page::new(1024);
-        page.put_string(17, "Hello, world!!!");
-        assert_eq!("Hello, world!!!", page.get_string(17));
+        page.put_string(117, "Hello, world!!!").unwrap();
+        assert_eq!("Hello, world!!!", page.get_string(117));
+
+        page.put_string(0, "message-123").unwrap();
+        assert_eq!("message-123", page.get_string(0));
+        assert_eq!("Hello, world!!!", page.get_string(117));
     }
 
     #[test]
-    fn page_store_load_bytes() {
+    fn put_get_string_with_page_overflow() {
+        let mut page = Page::new(128);
+        let res = page.put_string(200, "message-with-overflow");
+        assert!(matches!(res, Err(PageOverflow)));
+    }
+
+    #[test]
+    fn put_get_bytes() {
         let mut page = Page::new(4096);
-        page.put_bytes(100, &[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+        page.put_bytes(100, &[1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+            .unwrap();
         assert_eq!(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10], page.get_bytes(100));
     }
 
     #[test]
-    fn page_store_load_positive_int() {
+    fn put_get_positive_i32() {
         let mut page = Page::new(4096);
         page.put_u32(10, 0x0D_CC_BB_AA);
         assert_eq!(0x0D_CC_BB_AA, page.get_u32(10));
     }
 
     #[test]
-    fn page_store_load_negative_int() {
+    fn put_get_negative_i32() {
         let mut page = Page::new(4096);
-        page.put_i32(10, -123_456_789);
+        page.put_i32(10, -123_456_789).unwrap();
         assert_eq!(-123_456_789, page.get_i32(10));
     }
 }

@@ -81,9 +81,7 @@ impl<'a> LogManager<'a> {
 
         let data_size_in_bytes = data.len() + INTEGER_SIZE_IN_BYTES;
 
-        //
-        // value can be negative here, so will fail
-        //
+        // store_pos can be negative here
         let mut store_pos = (boundary as i32) - data_size_in_bytes as i32;
 
         // Page overflow, so store current page and append new block
@@ -100,7 +98,10 @@ impl<'a> LogManager<'a> {
         }
 
         self.page.put_u64(0, store_pos as u64);
-        self.page.put_bytes(store_pos as usize, data);
+
+        self.page
+            .put_bytes(store_pos as usize, data)
+            .expect("PageOverflow occurred");
 
         self.cur_lsn += 1;
         return self.cur_lsn;

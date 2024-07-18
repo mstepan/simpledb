@@ -247,8 +247,10 @@ mod tests {
             let mut file_mgr = FileManager::new(dir, DEFAULT_BLOCK_SIZE);
 
             let mut page = Page::new(DEFAULT_BLOCK_SIZE);
-            page.put_string(100, "user: 123, age: 99");
-            page.put_string(200, "Writing you own DB engine is complicated");
+            page.put_string(100, "user: 123, age: 99")
+                .expect("PageOverflow occurred");
+            page.put_string(200, "Writing you own DB engine is complicated")
+                .expect("PageOverflow occurred");
 
             let block = BlockId::new("user.data".to_string(), 0);
 
@@ -266,7 +268,7 @@ mod tests {
             );
 
             let mut new_page = Page::new(DEFAULT_BLOCK_SIZE);
-            new_page.put_string(100, "some new data");
+            new_page.put_string(100, "some new data").expect("PageOverflow occurred");
 
             // write to file 2nd time
             file_mgr.store_page(&block, &new_page);
