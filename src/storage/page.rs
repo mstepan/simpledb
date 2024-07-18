@@ -14,7 +14,11 @@ pub struct Page {
 }
 
 #[derive(Debug, Clone)]
-pub struct PageOverflow;
+pub struct PageOverflow {
+    page_size: usize,
+    offset: usize,
+    data_size: usize,
+}
 
 impl Page {
     pub fn new(size: u64) -> Self {
@@ -26,6 +30,10 @@ impl Page {
     #[allow(dead_code)]
     pub fn from_raw_buf(data: Vec<u8>) -> Self {
         Self { data }
+    }
+
+    pub fn block_size(&self) -> usize {
+        return self.data.len();
     }
 
     ///
@@ -111,7 +119,11 @@ impl Page {
 
     fn check_boundary(&self, offset: usize, elements_size: usize) -> Result<(), PageOverflow> {
         if offset + elements_size > self.data.len() {
-            return Err(PageOverflow);
+            return Err(PageOverflow {
+                page_size: self.block_size(),
+                offset,
+                data_size: elements_size,
+            });
         }
 
         return Ok(());
@@ -137,7 +149,7 @@ mod tests {
     fn put_get_string_with_page_overflow() {
         let mut page = Page::new(128);
         let res = page.put_string(200, "message-with-overflow");
-        assert!(matches!(res, Err(PageOverflow)));
+        assert!(matches!(res, Err(_)));
     }
 
     #[test]
@@ -153,6 +165,15 @@ mod tests {
         let mut page = Page::new(4096);
         page.put_u32(10, 0x0D_CC_BB_AA);
         assert_eq!(0x0D_CC_BB_AA, page.get_u32(10));
+    }
+
+    #[test]
+    fn put_i32_into_last_position() {
+        let mut page = Page::new(128);
+        let pos = page.block_size() - INTEGER_SIZE_IN_BYTES;
+        page.put_i32(pos, -123456789)
+            .expect("PageOverflow occurred");
+        assert_eq!(-123456789, page.get_i32(pos));
     }
 
     #[test]

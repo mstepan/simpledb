@@ -108,6 +108,76 @@ impl<'a> LogManager<'a> {
     }
 }
 
+impl<'a> IntoIterator for LogManager<'a> {
+    type Item = Vec<u8>;
+    type IntoIter = LogIterator<'a>;
+    fn into_iter(self) -> LogIterator<'a> {
+
+        let blocks_count = self
+            .file_mgr
+            .length_in_logical_blocks(&self.log_file_name.clone());
+
+        let block = BlockId::new(self.log_file_name.clone(), blocks_count-1);
+        let mut page = Page::new(self.file_mgr.block_size());
+
+
+        self.file_mgr.load_page(&block, &mut page);
+        let record_pos = self.page.get_u64(0);
+
+        return LogIterator {
+            file_mgr: self.file_mgr,
+            log_file_name: self.log_file_name.clone(),
+            page,
+            record_pos,
+            block,
+        };
+    }
+}
+
+///
+/// Iterates over LogManager logs from the recent one to the oldest one.
+///
+pub struct LogIterator<'a> {
+    file_mgr: &'a mut FileManager,
+    log_file_name: String,
+    page: Page,
+    record_pos: u64,
+    block: BlockId
+}
+
+impl LogIterator<'_> {
+    fn move_to_next_block(&mut self) {
+        self.block = BlockId::new(self.log_file_name.clone(), self.block.block_no - 1);
+        self.page = Page::new(self.file_mgr.block_size());
+
+        self.file_mgr.load_page(&self.block, &mut self.page);
+        self.record_pos = self.page.get_u64(0);
+    }
+}
+
+impl Iterator for LogIterator<'_> {
+    type Item = Vec<u8>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.record_pos == self.file_mgr.block_size() {
+
+            // 0-block reached, nothing left to traverse
+            if self.block.block_no  == 0 {
+                return None;
+            }
+            else {
+                self.move_to_next_block();
+            }
+        }
+
+        let log_entry = self.page.get_bytes(self.record_pos as usize);
+
+        self.record_pos += (log_entry.len() + INTEGER_SIZE_IN_BYTES) as u64;
+
+        return Some(log_entry.to_vec());
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -125,7 +195,7 @@ mod tests {
         let mut test_util = FSTestUtil::new(&db_dir_test);
         test_util.run_test(|dir| {
             let mut file_mgr = FileManager::with_default_block_size(dir);
-            let log_mgr = LogManager::new(&mut file_mgr, "log-file.dat");
+            let log_mgr = LogManager::new(&mut file_mgr, "log-file.data");
 
             assert_eq!(0, log_mgr.cur_lsn);
             assert_eq!(0, log_mgr.last_saved_lsn);
@@ -143,7 +213,7 @@ mod tests {
         let mut test_util = FSTestUtil::new(&db_dir_test);
         test_util.run_test(|dir| {
             let mut file_mgr = FileManager::with_default_block_size(dir);
-            let mut log_mgr = LogManager::new(&mut file_mgr, "log-file.dat");
+            let mut log_mgr = LogManager::new(&mut file_mgr, "log-file.data");
 
             let lsn = log_mgr.append("message-1".as_bytes());
             assert_eq!(1, lsn);
@@ -151,6 +221,36 @@ mod tests {
             log_mgr.append("message-2".as_bytes());
             let lsn = log_mgr.append("message-3".as_bytes());
             assert_eq!(3, lsn);
+        });
+    }
+
+    #[test]
+    fn append_logs_then_iterate() {
+        let db_dir_test = temp_dir()
+            .join("simpledb/log-manager")
+            .to_str()
+            .unwrap()
+            .to_string();
+
+        let mut test_util = FSTestUtil::new(&db_dir_test);
+        test_util.run_test(|dir| {
+            let mut file_mgr = FileManager::new(dir, 64);
+            let mut log_mgr = LogManager::new(&mut file_mgr, "log-file.data");
+
+            for i in 0..10 {
+                let msg = format!("message-{}", i);
+                log_mgr.append(msg.as_bytes());
+            }
+            log_mgr.flush_force();
+
+            let mut it = log_mgr.into_iter();
+
+            for i in (0..10).rev() {
+                assert_eq!(
+                    format!("message-{}", i),
+                    String::from_utf8(it.next().unwrap()).unwrap(),
+                );
+            }
         });
     }
 }
