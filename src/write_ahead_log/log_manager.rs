@@ -112,14 +112,12 @@ impl<'a> IntoIterator for LogManager<'a> {
     type Item = Vec<u8>;
     type IntoIter = LogIterator<'a>;
     fn into_iter(self) -> LogIterator<'a> {
-
         let blocks_count = self
             .file_mgr
             .length_in_logical_blocks(&self.log_file_name.clone());
 
         let block = BlockId::new(self.log_file_name.clone(), blocks_count-1);
         let mut page = Page::new(self.file_mgr.block_size());
-
 
         self.file_mgr.load_page(&block, &mut page);
         let record_pos = self.page.get_u64(0);
@@ -251,6 +249,26 @@ mod tests {
                     String::from_utf8(it.next().unwrap()).unwrap(),
                 );
             }
+        });
+    }
+
+    #[test]
+    fn iterate_over_empty_logs() {
+        let db_dir_test = temp_dir()
+            .join("simpledb/log-manager")
+            .to_str()
+            .unwrap()
+            .to_string();
+
+        let mut test_util = FSTestUtil::new(&db_dir_test);
+        test_util.run_test(|dir| {
+            let mut file_mgr = FileManager::new(dir, 64);
+            let mut log_mgr = LogManager::new(&mut file_mgr, "log-file-empty.data");
+            log_mgr.flush_force();
+
+            let mut it = log_mgr.into_iter();
+
+            assert_eq!(None, it.next());
         });
     }
 }
