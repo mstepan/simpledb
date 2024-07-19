@@ -1,10 +1,10 @@
 #![allow(dead_code)]
 
-use std::sync::Mutex;
 use crate::storage::block_id::BlockId;
 use crate::storage::file_manager::FileManager;
 use crate::storage::page::Page;
 use crate::utils::primitive_types::{INTEGER_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES};
+use std::sync::Mutex;
 
 ///
 /// The main purpose of LogManager is to manage APPEND-only list of logs.
@@ -44,7 +44,7 @@ impl<'a> LogManager<'a> {
             last_saved_lsn: 0,
             cur_block,
             page,
-            lock: Mutex::new(0)
+            lock: Mutex::new(0),
         };
     }
 
@@ -72,7 +72,6 @@ impl<'a> LogManager<'a> {
     /// log file.
     ///
     pub fn append(&mut self, data: &[u8]) -> u32 {
-
         let _guard = self.lock.lock().unwrap();
 
         let mut boundary = self.page.get_u64(0);
@@ -95,7 +94,9 @@ impl<'a> LogManager<'a> {
             store_pos = (boundary as i32) - data_size_in_bytes as i32;
         }
 
-        self.page.put_u64(0, store_pos as u64);
+        self.page
+            .put_u64(0, store_pos as u64)
+            .expect("Can't store u64 during log append");
 
         self.page
             .put_bytes(store_pos as usize, data)
@@ -111,7 +112,8 @@ impl<'a> LogManager<'a> {
         page: &mut Page,
     ) -> BlockId {
         let cur_block = file_mgr.append(log_file_name);
-        page.put_u64(0, file_mgr.block_size());
+        page.put_u64(0, file_mgr.block_size())
+            .expect("Can't store u64 ad log boundary");
         file_mgr.store_page(&cur_block, &page);
         return cur_block;
     }

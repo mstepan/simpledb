@@ -1,9 +1,12 @@
 #![allow(dead_code)]
 
+use std::str;
+
+use chrono::{DateTime, FixedOffset};
+
 use crate::utils::primitive_types::{
     INTEGER_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES, SHORT_SIZE_IN_BYTES,
 };
-use std::str;
 
 ///
 /// PAGE.
@@ -56,7 +59,8 @@ impl Page {
     pub fn put_bytes(&mut self, offset: usize, buf: &[u8]) -> Result<(), PageOverflow> {
         self.check_boundary(offset, buf.len() + INTEGER_SIZE_IN_BYTES)?;
 
-        self.put_u32(offset, buf.len() as u32);
+        self.put_u32(offset, buf.len() as u32)
+            .expect("Can't store u32 as byte array size");
 
         let new_offset = offset + INTEGER_SIZE_IN_BYTES;
 
@@ -125,9 +129,10 @@ impl Page {
     ///
     /// Store/Load unsigned int.
     ///
-    pub fn put_u32(&mut self, offset: usize, value: u32) {
-        //TODO: handle page overflow here
+    pub fn put_u32(&mut self, offset: usize, value: u32) -> Result<(), PageOverflow> {
+        self.check_boundary(offset, INTEGER_SIZE_IN_BYTES)?;
         self.data[offset..offset + INTEGER_SIZE_IN_BYTES].copy_from_slice(&value.to_be_bytes());
+        return Ok(());
     }
     pub fn get_u32(&self, offset: usize) -> u32 {
         u32::from_be_bytes(
@@ -140,9 +145,10 @@ impl Page {
     ///
     /// Store/load unsigned long.
     ///
-    pub fn put_u64(&mut self, offset: usize, value: u64) {
-        //TODO: handle page overflow here
+    pub fn put_u64(&mut self, offset: usize, value: u64) -> Result<(), PageOverflow> {
+        self.check_boundary(offset, LONG_SIZE_IN_BYTES)?;
         self.data[offset..offset + LONG_SIZE_IN_BYTES].copy_from_slice(&value.to_be_bytes());
+        return Ok(());
     }
 
     pub fn get_u64(&self, offset: usize) -> u64 {
@@ -153,6 +159,43 @@ impl Page {
         )
     }
 
+    ///
+    /// Store/load signed long.
+    ///
+    pub fn put_i64(&mut self, offset: usize, value: i64) -> Result<(), PageOverflow> {
+        self.check_boundary(offset, LONG_SIZE_IN_BYTES)?;
+        self.data[offset..offset + LONG_SIZE_IN_BYTES].copy_from_slice(&value.to_be_bytes());
+        return Ok(());
+    }
+
+    pub fn get_i64(&self, offset: usize) -> i64 {
+        i64::from_be_bytes(
+            self.data[offset..offset + LONG_SIZE_IN_BYTES]
+                .try_into()
+                .unwrap(),
+        )
+    }
+
+    ///
+    /// Store/load date and time.
+    /// Date will be stored as RFC-3339(https://www.rfc-editor.org/rfc/rfc3339.html) compliant string.
+    ///
+    pub fn put_date(
+        &mut self,
+        offset: usize,
+        value: DateTime<FixedOffset>,
+    ) -> Result<(), PageOverflow> {
+        self.put_string(offset, &value.to_rfc3339())?;
+        return Ok(());
+    }
+
+    pub fn get_date(&mut self, offset: usize) -> DateTime<FixedOffset> {
+        return DateTime::parse_from_rfc3339(self.get_string(offset)).unwrap();
+    }
+
+    ///
+    /// Check if current Page has enough space to store data with specified offset.
+    ///
     fn check_boundary(&self, offset: usize, elements_size: usize) -> Result<(), PageOverflow> {
         if offset + elements_size > self.data.len() {
             return Err(PageOverflow {
@@ -168,6 +211,8 @@ impl Page {
 
 #[cfg(test)]
 mod tests {
+    use chrono::Local;
+
     use super::*;
 
     #[test]
@@ -199,7 +244,7 @@ mod tests {
     #[test]
     fn put_get_positive_i32() {
         let mut page = Page::new(4096);
-        page.put_u32(10, 0x0D_CC_BB_AA);
+        page.put_u32(10, 0x0D_CC_BB_AA).unwrap();
         assert_eq!(0x0D_CC_BB_AA, page.get_u32(10));
     }
 
@@ -223,16 +268,25 @@ mod tests {
     fn put_get_boolean() {
         let mut page = Page::new(1024);
 
-        page.put_bool(0, true).unwrap();
-        page.put_bool(1, true).unwrap();
-        page.put_bool(2, false).unwrap();
-        page.put_bool(3, false).unwrap();
-        page.put_bool(4, true).unwrap();
+        let values_to_store = vec![true, true, false, false, true, false];
 
-        assert_eq!(true, page.get_bool(0));
-        assert_eq!(true, page.get_bool(1));
-        assert_eq!(false, page.get_bool(2));
-        assert_eq!(false, page.get_bool(3));
-        assert_eq!(true, page.get_bool(4));
+        for (i, val) in values_to_store.iter().enumerate() {
+            page.put_bool(i, *val).unwrap();
+        }
+
+        for (i, val) in values_to_store.iter().enumerate() {
+            assert_eq!(*val, page.get_bool(i));
+        }
+    }
+
+    #[test]
+    fn put_get_date() {
+        let local_date = Local::now();
+        let date_to_sore = local_date.with_timezone(local_date.offset());
+
+        let mut page = Page::new(4096);
+        page.put_date(100, date_to_sore.clone()).unwrap();
+
+        assert_eq!(date_to_sore, page.get_date(100));
     }
 }

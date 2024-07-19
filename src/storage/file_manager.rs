@@ -260,7 +260,6 @@ mod tests {
         });
     }
 
-
     #[test]
     fn write_to_file_and_read() {
         let db_dir_test = temp_dir()
