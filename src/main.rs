@@ -1,5 +1,7 @@
 use std::fs::{metadata, remove_dir_all};
 
+use chrono::Local;
+
 use crate::storage::file_manager::FileManager;
 use crate::write_ahead_log::log_manager::LogManager;
 
@@ -10,6 +12,10 @@ mod write_ahead_log;
 const DB_DIR: &str = "/Users/mstepan/repo-rust/simpledb/db";
 
 fn main() {
+    let local_date_time = Local::now();
+
+    println!("{}", local_date_time.timestamp_millis());
+
     if metadata(DB_DIR).is_ok() {
         remove_dir_all(DB_DIR).expect("Can't delete 'DB_DIR' directory");
     }

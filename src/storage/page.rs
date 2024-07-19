@@ -1,6 +1,8 @@
 #![allow(dead_code)]
 
-use crate::utils::primitive_types::{INTEGER_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES};
+use crate::utils::primitive_types::{
+    INTEGER_SIZE_IN_BYTES, LONG_SIZE_IN_BYTES, SHORT_SIZE_IN_BYTES,
+};
 use std::str;
 
 ///
@@ -68,6 +70,40 @@ impl Page {
         let new_offset = offset + INTEGER_SIZE_IN_BYTES;
 
         &self.data[new_offset..new_offset + buf_size_in_bytes as usize]
+    }
+
+    ///
+    /// Store/Load boolean value.
+    /// Boolean value will be stored us u8, with 1 indicating TRUE and 0 indicating FALSE.
+    ///
+    pub fn put_bool(&mut self, offset: usize, value: bool) -> Result<(), PageOverflow> {
+        self.check_boundary(offset, 1)?;
+
+        let value_as_u8 = if value { 1 } else { 0 };
+
+        self.data[offset] = value_as_u8;
+        return Ok(());
+    }
+    pub fn get_bool(&self, offset: usize) -> bool {
+        let bool_as_u8 = self.data[offset];
+
+        return if bool_as_u8 == 0 { false } else { true };
+    }
+
+    ///
+    /// Store/Load unsigned short.
+    ///
+    pub fn put_u16(&mut self, offset: usize, value: u16) -> Result<(), PageOverflow> {
+        self.check_boundary(offset, SHORT_SIZE_IN_BYTES)?;
+        self.data[offset..offset + SHORT_SIZE_IN_BYTES].copy_from_slice(&value.to_be_bytes());
+        return Ok(());
+    }
+    pub fn get_u16(&self, offset: usize) -> u16 {
+        u16::from_be_bytes(
+            self.data[offset..offset + SHORT_SIZE_IN_BYTES]
+                .try_into()
+                .unwrap(),
+        )
     }
 
     ///
@@ -181,5 +217,22 @@ mod tests {
         let mut page = Page::new(4096);
         page.put_i32(10, -123_456_789).unwrap();
         assert_eq!(-123_456_789, page.get_i32(10));
+    }
+
+    #[test]
+    fn put_get_boolean() {
+        let mut page = Page::new(1024);
+
+        page.put_bool(0, true).unwrap();
+        page.put_bool(1, true).unwrap();
+        page.put_bool(2, false).unwrap();
+        page.put_bool(3, false).unwrap();
+        page.put_bool(4, true).unwrap();
+
+        assert_eq!(true, page.get_bool(0));
+        assert_eq!(true, page.get_bool(1));
+        assert_eq!(false, page.get_bool(2));
+        assert_eq!(false, page.get_bool(3));
+        assert_eq!(true, page.get_bool(4));
     }
 }
