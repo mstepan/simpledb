@@ -25,6 +25,7 @@ pub struct FileManager {
     db_dir: String,
     files_map: Mutex<HashMap<String, File>>,
     block_size: u64,
+    io_stats: IOStats,
 }
 
 impl FileManager {
@@ -61,6 +62,7 @@ impl FileManager {
             db_dir: db_dir.to_string(),
             files_map: Mutex::new(HashMap::new()),
             block_size,
+            io_stats: IOStats::new(),
         }
     }
     pub fn block_size(&self) -> u64 {
@@ -99,6 +101,8 @@ impl FileManager {
 
         file.write_all_at(&page.data, block.block_no * self.block_size)
             .expect("Can't write page to file");
+
+        self.io_stats.written_blocks_cnt += 1;
     }
 
     ///
@@ -116,6 +120,8 @@ impl FileManager {
 
         file.read_exact_at(&mut page.data, block.block_no * self.block_size)
             .expect("Can't read page from file");
+
+        self.io_stats.read_blocks_cnt += 1;
     }
 
     ///
@@ -137,6 +143,8 @@ impl FileManager {
 
         file.write_all_at(&mut buf[..], new_block.block_no * self.block_size)
             .expect("Can't append to file end");
+
+        self.io_stats.written_blocks_cnt += 1;
 
         return new_block;
     }
@@ -171,6 +179,20 @@ impl FileManager {
 
             return file;
         }
+    }
+}
+
+struct IOStats {
+    read_blocks_cnt: u32,
+    written_blocks_cnt: u32,
+}
+
+impl IOStats {
+    fn new() -> Self {
+        return Self {
+            read_blocks_cnt: 0,
+            written_blocks_cnt: 0,
+        };
     }
 }
 
@@ -217,22 +239,27 @@ mod tests {
 
         let mut test_util = FSTestUtil::new(&db_dir_test);
         test_util.run_test(|dir| {
-            let mut file_mgr = FileManager::new(dir, DEFAULT_BLOCK_SIZE);
+            let mut file_mgr = FileManager::with_default_block_size(dir);
 
             let appends_count = 3;
 
             for _ in 0..appends_count {
-                file_mgr.append("log.dat");
+                file_mgr.append("log.data");
             }
 
-            let file = File::open(format!("{}/log.dat", dir)).expect("Can't open 'log.dat' file");
+            let file = File::open(format!("{}/log.data", dir)).expect("Can't open 'log.data' file");
 
             assert_eq!(
                 appends_count * DEFAULT_BLOCK_SIZE,
                 file.metadata().unwrap().len(),
             );
+
+            // Verify IOStats
+            assert_eq!(appends_count as u32, file_mgr.io_stats.written_blocks_cnt);
+            assert_eq!(0, file_mgr.io_stats.read_blocks_cnt);
         });
     }
+
 
     #[test]
     fn write_to_file_and_read() {
@@ -257,9 +284,17 @@ mod tests {
             // write to file 1st time
             file_mgr.store_page(&block, &page);
 
+            // Verify IOStats
+            assert_eq!(1, file_mgr.io_stats.written_blocks_cnt);
+            assert_eq!(0, file_mgr.io_stats.read_blocks_cnt);
+
             // read from file
             let mut page_from_file1 = Page::new(file_mgr.block_size);
             file_mgr.load_page(&block, &mut page_from_file1);
+
+            // Verify IOStats
+            assert_eq!(1, file_mgr.io_stats.written_blocks_cnt);
+            assert_eq!(1, file_mgr.io_stats.read_blocks_cnt);
 
             assert_eq!("user: 123, age: 99", page_from_file1.get_string(100));
             assert_eq!(
@@ -268,7 +303,9 @@ mod tests {
             );
 
             let mut new_page = Page::new(DEFAULT_BLOCK_SIZE);
-            new_page.put_string(100, "some new data").expect("PageOverflow occurred");
+            new_page
+                .put_string(100, "some new data")
+                .expect("PageOverflow occurred");
 
             // write to file 2nd time
             file_mgr.store_page(&block, &new_page);
@@ -277,6 +314,10 @@ mod tests {
             file_mgr.load_page(&block, &mut page_from_file2);
 
             assert_eq!("some new data", page_from_file2.get_string(100));
+
+            // Verify IOStats
+            assert_eq!(2, file_mgr.io_stats.written_blocks_cnt);
+            assert_eq!(2, file_mgr.io_stats.read_blocks_cnt);
         });
     }
 }
