@@ -1,4 +1,6 @@
 #![allow(dead_code)]
+
+use std::sync::Mutex;
 use crate::storage::block_id::BlockId;
 use crate::storage::file_manager::FileManager;
 use crate::storage::page::Page;
@@ -14,6 +16,7 @@ pub struct LogManager<'a> {
     last_saved_lsn: u32,
     cur_block: BlockId,
     page: Page,
+    lock: Mutex<i32>,
 }
 
 impl<'a> LogManager<'a> {
@@ -41,18 +44,8 @@ impl<'a> LogManager<'a> {
             last_saved_lsn: 0,
             cur_block,
             page,
+            lock: Mutex::new(0)
         };
-    }
-
-    fn append_new_block(
-        file_mgr: &mut FileManager,
-        log_file_name: &str,
-        page: &mut Page,
-    ) -> BlockId {
-        let cur_block = file_mgr.append(log_file_name);
-        page.put_u64(0, file_mgr.block_size());
-        file_mgr.store_page(&cur_block, &page);
-        return cur_block;
     }
 
     ///
@@ -75,8 +68,13 @@ impl<'a> LogManager<'a> {
     ///
     /// Append log information. The log information is saved right-to-left, so that
     /// LogIterator can read from most recent value to the oldest one in left-to-right order.
+    /// Call to this method should be protected by Mutex to prevent concurrent modifications of
+    /// log file.
     ///
     pub fn append(&mut self, data: &[u8]) -> u32 {
+
+        let _guard = self.lock.lock().unwrap();
+
         let mut boundary = self.page.get_u64(0);
 
         let data_size_in_bytes = data.len() + INTEGER_SIZE_IN_BYTES;
@@ -106,17 +104,30 @@ impl<'a> LogManager<'a> {
         self.cur_lsn += 1;
         return self.cur_lsn;
     }
+
+    fn append_new_block(
+        file_mgr: &mut FileManager,
+        log_file_name: &str,
+        page: &mut Page,
+    ) -> BlockId {
+        let cur_block = file_mgr.append(log_file_name);
+        page.put_u64(0, file_mgr.block_size());
+        file_mgr.store_page(&cur_block, &page);
+        return cur_block;
+    }
 }
 
 impl<'a> IntoIterator for LogManager<'a> {
     type Item = Vec<u8>;
     type IntoIter = LogIterator<'a>;
-    fn into_iter(self) -> LogIterator<'a> {
+    fn into_iter(mut self) -> LogIterator<'a> {
+        self.flush_force();
+
         let blocks_count = self
             .file_mgr
             .length_in_logical_blocks(&self.log_file_name.clone());
 
-        let block = BlockId::new(self.log_file_name.clone(), blocks_count-1);
+        let block = BlockId::new(self.log_file_name.clone(), blocks_count - 1);
         let mut page = Page::new(self.file_mgr.block_size());
 
         self.file_mgr.load_page(&block, &mut page);
@@ -140,7 +151,7 @@ pub struct LogIterator<'a> {
     log_file_name: String,
     page: Page,
     record_pos: u64,
-    block: BlockId
+    block: BlockId,
 }
 
 impl LogIterator<'_> {
@@ -158,12 +169,10 @@ impl Iterator for LogIterator<'_> {
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.record_pos == self.file_mgr.block_size() {
-
             // 0-block reached, nothing left to traverse
-            if self.block.block_no  == 0 {
+            if self.block.block_no == 0 {
                 return None;
-            }
-            else {
+            } else {
                 self.move_to_next_block();
             }
         }
@@ -239,7 +248,6 @@ mod tests {
                 let msg = format!("message-{}", i);
                 log_mgr.append(msg.as_bytes());
             }
-            log_mgr.flush_force();
 
             let mut it = log_mgr.into_iter();
 
@@ -263,8 +271,7 @@ mod tests {
         let mut test_util = FSTestUtil::new(&db_dir_test);
         test_util.run_test(|dir| {
             let mut file_mgr = FileManager::new(dir, 64);
-            let mut log_mgr = LogManager::new(&mut file_mgr, "log-file-empty.data");
-            log_mgr.flush_force();
+            let log_mgr = LogManager::new(&mut file_mgr, "log-file-empty.data");
 
             let mut it = log_mgr.into_iter();
 
