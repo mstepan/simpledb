@@ -25,4 +25,7 @@ env_maven.properties
 # MacOS caches files
 .DS_Store
 
+# Ignore data folder
+data/*
+
 
