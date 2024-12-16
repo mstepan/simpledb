@@ -1,0 +1,28 @@
+# Created by .ignore support plugin (hsz.mobi)
+### Java template
+# Compiled class file
+*.class
+
+# Maven target folder
+target
+
+# Maven shaded plugin generated file
+dependency-reduced-pom.xml
+
+# IntelliJ IDEA files
+.idea
+*.iml
+
+# Log file
+*.log
+
+# virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
+hs_err_pid*
+
+# Ignore env local properties
+env_maven.properties
+
+# MacOS caches files
+.DS_Store
+
+
