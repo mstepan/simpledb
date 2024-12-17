@@ -28,6 +28,7 @@ public final class FileManager {
 
     private final String folderPath;
     private final int blockSize;
+    private final AccessStatistic stats = new AccessStatistic();
 
     private FileManager(String folderPath, int blockSize) {
         checkArguments(folderPath != null, "Can't create DB with null DB folder");
@@ -64,6 +65,10 @@ public final class FileManager {
         return blockSize;
     }
 
+    public AccessStatisticSnapshot stats() {
+        return new AccessStatisticSnapshot(stats.blocksReadCount, stats.blocksWriteCount);
+    }
+
     /** Reads block content from disk into in-memory page. */
     public synchronized void read(BlockId blockId, Page page) {
         checkArguments(blockId != null, "blockId is null");
@@ -74,6 +79,7 @@ public final class FileManager {
         try {
             randomAccessFile.seek((long) blockId.blockNumber() * blockSize);
             randomAccessFile.getChannel().read(page.content());
+            ++stats.blocksReadCount;
         } catch (IOException ioEx) {
             throw new IllegalStateException("Can't read block %s".formatted(blockId), ioEx);
         }
@@ -90,6 +96,7 @@ public final class FileManager {
                     "Page was partially written to a block, expected bytes to be "
                             + "written %d but actually was written %d"
                                     .formatted(blockSize, writtenBytes));
+            ++stats.blocksWriteCount;
         } catch (IOException ioEx) {
             throw new IllegalStateException("Can't write block %s".formatted(blockId), ioEx);
         }
@@ -104,6 +111,7 @@ public final class FileManager {
 
             randomAccessFile.seek(newBlockNumber * blockSize);
             randomAccessFile.write(new byte[blockSize]);
+            ++stats.blocksWriteCount;
 
             return new BlockId(fileName, (int) newBlockNumber);
         } catch (IOException ioEx) {
@@ -130,5 +138,11 @@ public final class FileManager {
         } catch (FileNotFoundException fileNotFoundEx) {
             throw new IllegalStateException(fileNotFoundEx);
         }
+    }
+
+    /** Track statistic related to count of read/write blocks. */
+    private static final class AccessStatistic {
+        int blocksReadCount;
+        int blocksWriteCount;
     }
 }

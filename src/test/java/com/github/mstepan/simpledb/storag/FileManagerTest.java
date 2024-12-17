@@ -1,15 +1,20 @@
-package com.github.mstepan.simpledb;
+package com.github.mstepan.simpledb.storag;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.github.mstepan.simpledb.storage.AccessStatisticSnapshot;
 import com.github.mstepan.simpledb.storage.BlockId;
 import com.github.mstepan.simpledb.storage.FileManager;
 import com.github.mstepan.simpledb.storage.Page;
+import java.util.UUID;
+import org.junit.jupiter.api.Test;
 
-public class SimpleDbMain {
+final class FileManagerTest {
 
-    public static void main() {
+    @Test
+    void storeLoadMixedData() {
 
-        final String fileName = "1.dat";
+        final String fileName = "%s.dat".formatted(UUID.randomUUID().toString());
 
         FileManager fileManager =
                 FileManager.getInstance("C:\\Users\\maksym\\repo\\simpledb\\data", 100);
@@ -23,16 +28,9 @@ public class SimpleDbMain {
         Page newPage = new Page(fileManager.blockSize());
         fileManager.read(new BlockId(fileName, 0), newPage);
 
-        String strFromPage = newPage.getString(0);
-        int intFromPage = newPage.getInt(50);
-        System.out.printf("Read from file, str: '%s', int: %d %n", strFromPage, intFromPage);
+        assertEquals("Hello, world!!!", newPage.getString(0));
+        assertEquals(123, newPage.getInt(50));
 
-        AccessStatisticSnapshot stats = fileManager.stats();
-
-        System.out.printf(
-                "read blocks: %d, write blocks: %d %n",
-                stats.blocksReadCount(), stats.blocksWriteCount());
-
-        System.out.println("SimpleDb main done...");
+        assertEquals(new AccessStatisticSnapshot(1, 1), fileManager.stats());
     }
 }

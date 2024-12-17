@@ -6,7 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import com.github.mstepan.simpledb.storage.BlockId;
 import org.junit.jupiter.api.Test;
 
-public class BlockIdTest {
+final class BlockIdTest {
 
     @Test
     void equalsAndHashCodeTest() {
