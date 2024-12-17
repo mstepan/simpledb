@@ -5,8 +5,12 @@ import static com.github.mstepan.simpledb.util.Preconditions.checkArguments;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
+import java.util.Date;
 
 public final class Page {
+
+    private static final byte BYTE_ZERO = 0;
+    private static final byte BYTE_ONE = 1;
 
     private static final Charset DEFAULT_CHARSET = StandardCharsets.US_ASCII;
     private final int blockSize;
@@ -32,19 +36,14 @@ public final class Page {
         return buf;
     }
 
-    public long getLong(int offset) {
-        checkBoundary(offset + Long.BYTES);
-        return buf.getLong(offset);
-    }
-
     public void putLong(int offset, long value) {
         checkBoundary(offset + Long.BYTES);
         buf.putLong(offset, value);
     }
 
-    public int getInt(int offset) {
-        checkBoundary(offset + Integer.BYTES);
-        return buf.getInt(offset);
+    public long getLong(int offset) {
+        checkBoundary(offset + Long.BYTES);
+        return buf.getLong(offset);
     }
 
     public void putInt(int offset, int value) {
@@ -52,14 +51,36 @@ public final class Page {
         buf.putInt(offset, value);
     }
 
-    public char getChar(int offset) {
-        checkBoundary(offset + Character.BYTES);
-        return buf.getChar(offset);
+    public int getInt(int offset) {
+        checkBoundary(offset + Integer.BYTES);
+        return buf.getInt(offset);
     }
 
     public void putChar(int offset, char value) {
         checkBoundary(offset + Character.BYTES);
         buf.putChar(offset, value);
+    }
+
+    public char getChar(int offset) {
+        checkBoundary(offset + Character.BYTES);
+        return buf.getChar(offset);
+    }
+
+    public void putBoolean(int offset, boolean value) {
+        checkBoundary(offset + Character.BYTES);
+        buf.put(offset, value ? BYTE_ZERO : BYTE_ONE);
+    }
+
+    public boolean getBoolean(int offset) {
+        checkBoundary(offset + Character.BYTES);
+        return buf.get(offset) == BYTE_ZERO;
+    }
+
+    public void putBytes(int offset, byte[] src) {
+        checkBoundary(offset + Integer.BYTES + src.length);
+        buf.position(offset);
+        buf.putInt(src.length);
+        buf.put(src);
     }
 
     public byte[] getBytes(int offset) {
@@ -74,11 +95,8 @@ public final class Page {
         return dest;
     }
 
-    public void putBytes(int offset, byte[] src) {
-        checkBoundary(offset + Integer.BYTES + src.length);
-        buf.position(offset);
-        buf.putInt(src.length);
-        buf.put(src);
+    public void putString(int offset, String str) {
+        putBytes(offset, str.getBytes(DEFAULT_CHARSET));
     }
 
     public String getString(int offset) {
@@ -86,8 +104,12 @@ public final class Page {
         return new String(rawBytes, DEFAULT_CHARSET);
     }
 
-    public void putString(int offset, String str) {
-        putBytes(offset, str.getBytes(DEFAULT_CHARSET));
+    public void putDate(int offset, Date value) {
+        putLong(offset, value.getTime());
+    }
+
+    public Date getDate(int offset) {
+        return new Date(getLong(offset));
     }
 
     public static int strLengthInBytes(int strLength) {
