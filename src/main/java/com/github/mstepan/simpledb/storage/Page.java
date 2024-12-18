@@ -1,16 +1,19 @@
 package com.github.mstepan.simpledb.storage;
 
 import static com.github.mstepan.simpledb.util.Preconditions.checkArguments;
+import static com.github.mstepan.simpledb.util.Preconditions.checkState;
 
 import java.nio.ByteBuffer;
-import java.nio.charset.Charset;
-import java.nio.charset.StandardCharsets;
+import java.nio.CharBuffer;
+import java.nio.charset.*;
 import java.util.Date;
 
 public final class Page {
 
     private static final byte BYTE_ZERO = 0;
     private static final byte BYTE_ONE = 1;
+
+    private static final char CSTRING_TERMINATOR = '\0';
 
     private static final Charset DEFAULT_CHARSET = StandardCharsets.US_ASCII;
     private final int blockSize;
@@ -77,6 +80,7 @@ public final class Page {
     }
 
     public void putBytes(int offset, byte[] src) {
+        checkArguments(src != null, "null 'src' byte[] array detected");
         checkBoundary(offset + Integer.BYTES + src.length);
         buf.position(offset);
         buf.putInt(src.length);
@@ -96,12 +100,65 @@ public final class Page {
     }
 
     public void putString(int offset, String str) {
+        checkArguments(str != null, "null 'str' detected");
         putBytes(offset, str.getBytes(DEFAULT_CHARSET));
     }
 
     public String getString(int offset) {
         byte[] rawBytes = getBytes(offset);
         return new String(rawBytes, DEFAULT_CHARSET);
+    }
+
+    /** Store string as C-string with '\0' terminated character at the end. */
+    public void putStringC(int offset, String str) {
+        checkArguments(str != null, "null 'str' detected");
+
+        final CharsetEncoder charsEncoder = DEFAULT_CHARSET.newEncoder();
+        int bytesPerChar = (int) charsEncoder.maxBytesPerChar();
+        int charsToWrite = str.length() + 1;
+
+        checkBoundary(offset + bytesPerChar * charsToWrite);
+
+        try {
+            ByteBuffer encodedData = charsEncoder.encode(CharBuffer.wrap(str + CSTRING_TERMINATOR));
+            buf.put(offset, encodedData.array());
+        } catch (CharacterCodingException encodingEx) {
+            throw new IllegalStateException(encodingEx);
+        }
+    }
+
+    public String getStringC(int offset) {
+        StringBuilder data = new StringBuilder();
+
+        final CharsetDecoder charsDecoder = DEFAULT_CHARSET.newDecoder();
+        CharBuffer charBuffer = CharBuffer.allocate(1);
+
+        buf.position(offset);
+
+        while (true) {
+            checkState(
+                    offset < blockSize,
+                    "'offset' is out of bounds for Page, offset = %d, page boundary = %d"
+                            .formatted(offset, blockSize));
+
+            CoderResult result = charsDecoder.decode(buf, charBuffer, false);
+
+            checkState(!result.isError(), "Decoding character error");
+
+            if (charBuffer.position() > 0) {
+                charBuffer.flip();
+                char decodedSingleCh = charBuffer.get();
+
+                if (decodedSingleCh == CSTRING_TERMINATOR) {
+                    break;
+                }
+
+                data.append(decodedSingleCh);
+                charBuffer.clear();
+            }
+        }
+
+        return data.toString();
     }
 
     public void putDate(int offset, Date value) {

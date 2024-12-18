@@ -57,33 +57,41 @@ final class FileManagerTest {
 
         Page page = new Page(fileManager.blockSize());
 
+        // put primitive values
         page.putChar(0, 'A');
         page.putInt(5, 111);
         page.putLong(10, 777L);
         page.putBoolean(20, true);
         page.putBoolean(21, false);
 
+        // put byte[] array and String (including C-like string)
         page.putBytes(100, new byte[] {10, 20, 30, 40, 50});
         page.putString(120, "Hello, world!!!");
+        page.putStringC(150, "c-like string");
 
+        // put Date
         final Date now = new Date();
-        page.putDate(150, now);
+        page.putDate(200, now);
 
         fileManager.write(new BlockId(fileName, 0), page);
 
         Page newPage = new Page(fileManager.blockSize());
         fileManager.read(new BlockId(fileName, 0), newPage);
 
+        // check primitive values
         assertEquals('A', newPage.getChar(0));
         assertEquals(111, newPage.getInt(5));
         assertEquals(777, newPage.getLong(10));
-
         assertTrue(newPage.getBoolean(20));
         assertFalse(newPage.getBoolean(21));
 
+        // check byte[] array and Strings
         assertArrayEquals(new byte[] {10, 20, 30, 40, 50}, newPage.getBytes(100));
         assertEquals("Hello, world!!!", newPage.getString(120));
-        assertEquals(now, newPage.getDate(150));
+        assertEquals("c-like string", newPage.getStringC(150));
+
+        // check Date
+        assertEquals(now, newPage.getDate(200));
 
         assertEquals(new AccessStatisticSnapshot(1, 1), fileManager.stats());
     }
